@@ -1,4 +1,6 @@
-# Publishes the ready-made site (index.html in the repo root) to GitHub Pages on every push to main.
+# Publishes the presentation to GitHub Pages on every push to main.
+# Upload the one-file presentation with any name (index.html, "index (1).html", ...):
+# the biggest .html file in the repo is published as the site's index.html.
 name: Deploy to GitHub Pages
 
 on:
@@ -23,9 +25,29 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pick the presentation file
+        run: |
+          shopt -s nullglob
+          files=(*.html)
+          if [ ${#files[@]} -eq 0 ]; then
+            # No .html file left (e.g. deleted by mistake): restore the last one from history
+            gone=$(git rev-list -n 1 HEAD -- '*.html')
+            if [ -n "$gone" ]; then
+              git ls-tree --name-only "$gone^" | grep -i '\.html$' | while IFS= read -r f; do git checkout "$gone^" -- "$f"; done
+            fi
+            files=(*.html)
+          fi
+          if [ ${#files[@]} -eq 0 ]; then echo "::error::No .html file found - upload index.html"; exit 1; fi
+          main=$(ls -S -- "${files[@]}" | head -n 1)
+          echo "Publishing: $main"
+          mkdir -p _site
+          cp -- "$main" _site/index.html
+          touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
